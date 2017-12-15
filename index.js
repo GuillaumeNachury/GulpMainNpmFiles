@@ -4,9 +4,34 @@ var callerId = require('caller-id');
 
 module.exports = function(options) {
   function getMainFile(modulePath) {
-    var json = JSON.parse(fs.readFileSync(modulePath + '/package.json'));
-    return modulePath + "/" + (json.main || "index.js");
+    if(isInOverrides(modulePath)){
+      return getNewPathForModule(modulePath);
+    }
+    else{
+      var json = JSON.parse(fs.readFileSync(modulePath + '/package.json'));
+      return [modulePath + "/" + (json.main || "index.js")];
+    }
+    
   };
+
+  function getNewPathForModule(mPath){
+    for (var key in overrides) {
+      if((options.nodeModulesPath + "/" + key) === mPath){
+        if( Array.isArray(overrides[key].main)){
+			return overrides[key].main.map(function(el){ return options.nodeModulesPath+'/'+key+'/'+el});
+		}
+		else return [options.nodeModulesPath + "/" + key + "/"+overrides[key].main];
+      }
+    }
+    return 'unknown';
+  }
+
+  function isInOverrides(mPath){
+    for (var key in overrides) {
+      if((options.nodeModulesPath + "/" + key) === mPath) return true;
+    }
+    return false;
+  }
 
   options = options || {};
 
@@ -25,12 +50,16 @@ module.exports = function(options) {
   }
 
   var buffer, packages, keys;
+  var overrides;
   buffer = fs.readFileSync(options.packageJsonPath);
   packages = JSON.parse(buffer.toString());
   keys = [];
+  overrides = packages.overrides || {};
+
+
 
   for (var key in packages.dependencies) {
-    keys.push(getMainFile(options.nodeModulesPath + "/" + key));
+    keys = keys.concat(getMainFile(options.nodeModulesPath + "/" + key));
   }
 
   if (options.devDependencies) {
